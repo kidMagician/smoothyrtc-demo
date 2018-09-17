@@ -1,9 +1,12 @@
 var WebSocketServer = require('ws').Server; 
+var async = require('async')
 
 var wss = new WebSocketServer({port: 9090}); 
 
+
 var room = require('./room.js');
 var user = require('./user.js');
+var signaling = require('./signaling.js');
 // var logger = require('./../logger.js')
 
 const BROADCASTMESSAGE ={
@@ -20,7 +23,6 @@ const NEGOTIATION_MESSAGE ={
 }
 
 const ROOM_MESSANGE ={
-  CREATE_ROOM:"room:createRoom",
   ENTER_ROOM:"room:enterRoom",
   FAILED_ENTER_ROOM:"room:failedEnterRoom",
   LEAVE_ROOM:"room:leaveRoom",
@@ -31,237 +33,293 @@ const SESSION_MESSAGE ={
   LOGOUT: "session:logout"
 }
 
+const ERR_MESSAGE ={
+  INVALIDMESSAGE: "err:invalidMessage"
+}
+
 wss.on('connection', function(connection) {
   
   console.log("User connected");
 	
   connection.on('message', function(message) { 
-	
-      var data; 
-		
-      try { 
-         data = JSON.parse(message); 
+    
+    async.waterfall(
+      [
         
-      } catch (e) { 
-         console.log("Invalid JSON"); 
-         data = {}; 
-      }
+        function(asyncCallBack){
+          signaling.isInvalidMessage(message,connection,asyncCallBack)
+        },
+        function(isInvalidMessage,asyncCallBack){
+          if(isInvalidMessage){
+  
+            signaling.handleMessage(message)
 
-      if(data.type != SESSION_MESSAGE.LOGIN){
-        if(!user.authenticate(data.fromUserID)){
+          }else{
 
-          var message ={
-            type: "authenticate",
-            success:false
+            
           }
+
+          asyncCallBack(null)
+
         }
+     ],
+      function(err){
+        if(err){
+          console.log(err)
+        }
+
       }
-      
-      switch (data.type) {
+    );
+      // var data; 
+		
+      // try { 
+      //    data = JSON.parse(message); 
         
-        case SESSION_MESSAGE.LOGIN:
+      // } catch (e) { 
+      //    console.log("Invalid JSON"); 
+      //    data = {}; 
+      // }
 
-          console.log("try login ",data.fromUserID)
+      // if(data.type != SESSION_MESSAGE.LOGIN){
+      //   if(!user.authenticate(data.fromUserID)){
 
-          user.createUser(data.fromUserID,connection,(err,success)=>{
+      //     var message ={
+      //       type: "authenticate",
+      //       success:false
+      //     }
+      //   }
+      // }
+      
+      // switch (data.type) {
+        
+      //   case SESSION_MESSAGE.LOGIN:
 
-            if(err){
-              console.log(err)
-              throw err
-            }
-
-            var message = {
-              type: SESSION_MESSAGE.LOGIN,
-              success: success
-            }
-
-            connection.send(JSON.stringify(message));
-          });
-
-        break;
-        case SESSION_MESSAGE.LOGOUT:
+      //     console.log("try login ",data.fromUserID)
           
-          console.log(data.fromUserID ," logout");
+      //     user.createUser(data.fromUserID,connection,(err,success)=>{
+
+      //       if(err){
+      //         console.log(err)
+      //         throw err
+      //       }
+
+      //       var message = {
+      //         type: SESSION_MESSAGE.LOGIN,
+      //         success: success
+      //       }
+
+      //       connection.send(JSON.stringify(message));
+      //     });
+
+      //   break;
+      //   case SESSION_MESSAGE.LOGOUT:
           
-          message ={
-            type: SESSION_MESSAGE.LOGOUT
-          };
+      //     console.log(data.fromUserID ," logout");
+          
+      //     message ={
+      //       type: SESSION_MESSAGE.LOGOUT
+      //     };
 
-          user.sendTo(data.fromUserID,message);
+      //     user.sendTo(data.fromUserID,message);
 
-        break;
-        case ROOM_MESSANGE.CREATE_ROOM:
+      //   break;
 
-          console.log("create room(",data.roomID,") from ",data.fromUserID)
-          // log.info(data.fromUserID," create ", data.roomID )
-
-          room.createRoom(data.roomID,data.fromUserID,(err,room)=>{
-
-            if(err){
-                console.log("err")
-                throw err
-            }
-
-            if(room){
-              var message = {
-                type: ROOM_MESSANGE.CREATE_ROOM,
-                success: true
-                
-              }
-            }else{
-              var message = {
-                type: ROOM_MESSANGE.CREATE_ROOM,
-                success: false 
-              }
-            }
-
-            user.sendTo(data.fromUserID,message);
-          })
-
-        break;
-
-        case ROOM_MESSANGE.ENTER_ROOM: 
+      //   case ROOM_MESSANGE.ENTER_ROOM: 
            
-          console.log("enter room",data.fromUserID ,data.roomID)
+      //     console.log("enter room",data.fromUserID ,data.roomID)
 
-          room.enterRoom(data.roomID,data.fromUserID,(err,users)=>{
-            if(err){
-              
-              console.log(err)
-              throw err;
-            }
+      //     async.waterfall([
+      //       function(asyncCallBack){
+      //         room.isRoom(data.roomID,asyncCallBack)
 
-            var sanitizedUsers = [];
+      //       },
+      //       function(isRoom,asyncCallBack){
+      //           if(isRoom){
+      //             console.log("enterRoom")
 
-            for(var key in users){    //change to map??
+      //             room.enterRoom(data.roomID,data.fromUserID,(err,enteredRoom)=>{
+      //               if(err){
+      //                 asyncCallBack(err);
+      //               }
+
+      //               asyncCallBack(null, enteredRoom)
+        
+      //             });
+
+      //           }else{
+
+      //             console.log("createRoom("+ data.roomID+")")
+
+      //             room.createRoom(data.roomID,data.fromUserID,(err,createdRoom)=>{
+                    
+      //               if(err){
+      //                 asyncCallBack(err)
+      //               }
+                    
+      //               asyncCallBack(null,createdRoom)
+        
+      //             })
+      //           }
+
+      //       },
+      //       function(room,asyncCallBack){
+
+      //         var sanitizedRemoteUsers = [];
+        
+      //         for(var key in room.users){    //change to map??
+
+      //           sanitizedRemoteUsers.push(key);
                 
-              if(key!=data.fromUserID){
-                sanitizedUsers.push(key);
-              }
+      //         }
 
-            }    
+      //         asyncCallBack(null,sanitizedRemoteUsers)
+              
+      //       },function(sanitizedUsers, asyncCallBack){
 
-            var message = {
-              from: data.fromUserID,
-              type: ROOM_MESSANGE.ENTER_ROOM, 
-              roomName: data.roomName,
-              users : sanitizedUsers
-            }
+      //         var room = {
+      //           "roomID": data.roomID,
+      //           "users":sanitizedUsers,
+      //         }
 
-            user.sendTo(data.fromUserID,message);
+      //         var message ={
 
-            var broadcastMessage ={
-              from:data.fromUserID,
-              type: BROADCASTMESSAGE.ENTER_ROOM,
-              roomName: data.roomName
-            }
+      //           // from:data.fromUserID,
+      //           type: ROOM_MESSANGE.ENTER_ROOM,
+      //           room: room,
+      //           success: true
+      //         }
 
-            room.broadcast(data.fromUserID,data.roomID,broadcastMessage,(err)=>{
-              if(err){
-                console.log(err);
-                throw err
-              }
-            })
+      //         user.sendTo(data.fromUserID,message);
+
+      //         if(Object.keys(sanitizedUsers).length>1){
+
+      //           var message ={
+
+      //             from:data.fromUserID,
+      //             type: BROADCASTMESSAGE.ENTER_ROOM,
+      //             room: room,
+      //             success:true
+      //           }
+    
+      //           room.broadcast(data.fromUserID,data.roomID,message,(err)=>{
+                  
+      //             if(err){
+      //               asyncCallBack(err)
+      //             }
+
+      //           })
+
+      //         }
+              
+      //         asyncCallBack(null)
+              
+      //       }
             
 
-          });
-             
-        break;
-        case ROOM_MESSANGE.LEAVE_ROOM: 
-        
-          console.log(data.fromUserID ," leave from",data.roomID);
+
+      //     ],function(err){
+      //       if(err){
+
+      //         console.log(err)
+      //         //todo: rollback
+
+      //       }
+
+      //       console.log("enter Room process done")
+            
+      //     })
           
-          room.leaveRoom(data.fromUserID,data.roomID,(err)=>{
+             
+      //   break;
+      //   case ROOM_MESSANGE.LEAVE_ROOM: 
+        
+      //     console.log(data.fromUserID ," leave from",data.roomID);
+          
+      //     room.leaveRoom(data.fromUserID,data.roomID,(err)=>{
 
-            if(err){
-              console.log(err)
-              throw err
-            }
+      //       if(err){
+      //         console.log(err)
+      //         throw err
+      //       }
 
-            var message={
+      //       var message={
 
-              fromUserID: data.fromUserID,
-              type: ROOM_MESSANGE.LEAVE_ROOM,
-            }
+      //         fromUserID: data.fromUserID,
+      //         type: ROOM_MESSANGE.LEAVE_ROOM,
+      //       }
 
-            user.sendTo(data.fromUserID,message);
+      //       user.sendTo(data.fromUserID,message);
 
-            var broadcastMessage={
-              userID: data.fromUserID,
-              type: BROADCASTMESSAGE.LEAVE_ROOM
-            }
+      //       var broadcastMessage={
+      //         userID: data.fromUserID,
+      //         type: BROADCASTMESSAGE.LEAVE_ROOM
+      //       }
 
-            if(room.rooms[data.roomID]){
+      //       if(room.rooms[data.roomID]){
 
-              room.broadcast(data.fromUserID,data.roomID,broadcastMessage,(err)=>{
-                if(err){
-                  console.log(err);
-                  throw err
-                }
+      //         room.broadcast(data.fromUserID,data.roomID,broadcastMessage,(err)=>{
+      //           if(err){
+      //             console.log(err);
+      //             throw err
+      //           }
                 
-              });
+      //         });
 
-            }
+      //       }
 
-          });
+      //     });
         
-      break;
+      //   break;
 
-        case NEGOTIATION_MESSAGE.OFFER:
+      //   case NEGOTIATION_MESSAGE.OFFER:
       
-          console.log("Sending offer from ", data.fromUserID,"to ",data.toUserID);
+      //     console.log("Sending offer from ", data.fromUserID,"to ",data.toUserID);
         
-          user.sendTo(data.toUserID, { 
-            fromUserID: data.fromUserID,
-            type: NEGOTIATION_MESSAGE.OFFER, 
-            offer: data.offer, 
-            toUserID: data.toUserID
-          }); 
+      //     user.sendTo(data.toUserID, { 
+      //       fromUserID: data.fromUserID,
+      //       type: NEGOTIATION_MESSAGE.OFFER, 
+      //       offer: data.offer, 
+      //       toUserID: data.toUserID
+      //     }); 
 
-        break;
+      //   break;
 
-        case NEGOTIATION_MESSAGE.ANSWER: 
+      //   case NEGOTIATION_MESSAGE.ANSWER: 
 
-        console.log("Sending answer from ",data.fromUserID ," to ",data.toUserID); 
+      //   console.log("Sending answer from ",data.fromUserID ," to ",data.toUserID); 
 
-        user.sendTo(data.toUserID, { 
-          fromUserID: data.fromUserID,
-          type: NEGOTIATION_MESSAGE.ANSWER, 
-          answer: data.answer, 
-          toUserID: data.toUserID
-        }); 
+      //   user.sendTo(data.toUserID, { 
+      //     fromUserID: data.fromUserID,
+      //     type: NEGOTIATION_MESSAGE.ANSWER, 
+      //     answer: data.answer, 
+      //     toUserID: data.toUserID
+      //   }); 
 
-      break; 
+      // break; 
      
-      case NEGOTIATION_MESSAGE.CANDIDATE: 
+      // case NEGOTIATION_MESSAGE.CANDIDATE: 
         
-        console.log("Sending candidate from",data.fromUserID," to ", data.toUserID); 
+      //   console.log("Sending candidate from",data.fromUserID," to ", data.toUserID); 
 
-        user.sendTo(data.toUserID, { 
-          fromUserID: data.fromUserID,
-          type: NEGOTIATION_MESSAGE.CANDIDATE, 
-          candidate: data.candidate, 
-          toUserID: data.toUserID
-        }); 
+      //   user.sendTo(data.toUserID, { 
+      //     fromUserID: data.fromUserID,
+      //     type: NEGOTIATION_MESSAGE.CANDIDATE, 
+      //     candidate: data.candidate, 
+      //     toUserID: data.toUserID
+      //   }); 
         
-      break;
+      // break;
 
-      case "inviteRoom": 
+      // default: 
 
-        console.log("Sending invite from ",data.fromUserID,"to ",data.toUserID);
-
-        user.sendTo(to,data.message)
-
-      break;
-
-      default: 
-          sendToConnection(connection, { 
-            type: "error", 
-            message: "Command not found: " + data.type 
-          }); 
+      //   console.log("send Invalide err to ",data.fromUserID )
+      //   user.sendTo(data.fromUserID, { 
+      //       type: ERR_MESSAGE.INVALIDMESSAGE, 
+      //       message: "sending Invalid Message type:" + data.type 
+      //     }); 
       
-      break; 
-      }
+      // break; 
+      // }
 	}); 
 	
   connection.on("close", function() { 

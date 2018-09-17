@@ -29,10 +29,27 @@ function isNameTooShort(roomID){
 function isUserinRoom(userID,roomID){
 
     if (rooms[roomID].users[userID]){
+        
         return true;
     }else{
         return false;
     }
+
+}
+
+module.exports.isRoom = function(roomID,callback){
+    
+    if(!roomID){
+        return callback(new Error('roomID cat not be null'))
+    }
+
+    if(!rooms[roomID]){
+        callback(null,false)
+    }else{
+        return callback(null,true)
+    }
+
+    
 
 }
 
@@ -55,7 +72,7 @@ module.exports.createRoom = function(roomID,userID,callback){
 
     if(!roomID){
 
-        return callback(new Error('roomename can not be null'));
+        return callback(new Error('roomeID can not be null'));
     }
 
     if(user.users[userID]){
@@ -112,9 +129,7 @@ module.exports.enterRoom =function(roomID,userID, callback){
         
         rooms[roomID].users[userID] =user.users[userID];
 
-        var users =rooms[roomID].users
-
-        return callback(null,users)
+        return callback(null,rooms[roomID])
     
     }else{
         
@@ -179,7 +194,6 @@ module.exports.broadcast = function(from_userID,roomID,message,callback){
         return callback(new Error('room is not available'));
     }
 
-
     for(var userID in rooms[roomID].users){
         if(userID != from_userID){
             user.sendTo(userID,message)
@@ -187,7 +201,6 @@ module.exports.broadcast = function(from_userID,roomID,message,callback){
     }
 
     return callback(null)
-
     
 }
 

@@ -9,11 +9,9 @@ util.inherits(HttpError, WebSocketError);
 
 function RoomError(roomname,message){
     Error.call()
-
     
 }
 util.inherits(HttpError,WebSoketError)
-
 
 
 function BadRequest()
